@@ -73,6 +73,8 @@ begin
                      next
                    end
 
+      req_params[:type] = wx_cond
+
       # Check cache
       api_resp = cache["cache_#{req_params}"]
 

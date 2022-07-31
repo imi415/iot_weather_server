@@ -25,10 +25,12 @@ begin
   client.subscribe('iot/weather/testclient/response')
 
   client.publish('iot/weather/testclient/request', { type: 'condition', city_id: 10 }.to_cbor)
+  client.publish('iot/weather/testclient/request', { type: 'aqi', city_id: 10 }.to_cbor)
+  client.publish('iot/weather/testclient/request', { type: 'forecast24', city_id: 10 }.to_cbor)
 
-  _, payload = client.get
-  p CBOR.decode(payload)
-
+  client.get do |_, payload|
+    p CBOR.decode(payload)
+  end
 rescue SystemExit, Interrupt
   puts "Interrupt caught, client [#{client}] disconnect."
   client.disconnect
