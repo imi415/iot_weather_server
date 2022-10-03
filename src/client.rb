@@ -7,9 +7,10 @@ Bundler.require
 Dotenv.load
 Dotenv.require_keys('MOJI_APPCODE', 'IOT_MQTT_HOST', 'IOT_MQTT_PORT', 'IOT_MQTT_SSL')
 
-begin
-  client = MQTT::Client.new
+CITY_ID = 3
 
+client = MQTT::Client.new
+begin
   client.host = ENV['IOT_MQTT_HOST']
   client.port = ENV['IOT_MQTT_PORT'].to_i
 
@@ -24,9 +25,11 @@ begin
 
   client.subscribe('iot/weather/testclient/response')
 
-  client.publish('iot/weather/testclient/request', { type: 'condition', city_id: 10 }.to_cbor)
-  client.publish('iot/weather/testclient/request', { type: 'aqi', city_id: 10 }.to_cbor)
-  client.publish('iot/weather/testclient/request', { type: 'forecast24', city_id: 10 }.to_cbor)
+  client.publish('iot/weather/testclient/request', { type: 'condition', city_id: CITY_ID }.to_cbor)
+  client.publish('iot/weather/testclient/request', { type: 'aqi', city_id: CITY_ID }.to_cbor)
+  client.publish('iot/weather/testclient/request', { type: 'forecast24h', city_id: CITY_ID }.to_cbor)
+  client.publish('iot/weather/testclient/request', { type: 'forecast6d', city_id: CITY_ID }.to_cbor)
+  client.publish('iot/weather/testclient/request', { type: 'forecast15d', city_id: CITY_ID }.to_cbor)
 
   client.get do |_, payload|
     p CBOR.decode(payload)

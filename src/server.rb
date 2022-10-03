@@ -7,7 +7,13 @@ Bundler.require
 Dotenv.load
 Dotenv.require_keys('MOJI_APPCODE', 'CACHE_TTL', 'IOT_MQTT_HOST', 'IOT_MQTT_PORT', 'IOT_MQTT_SSL')
 
-wxapi = MojiWeather::Api::RestClient.new(app_code: ENV['MOJI_APPCODE'])
+@wxapi = MojiWeather::Api::RestClient.new(app_code: ENV['MOJI_APPCODE'])
+@wxapi_simple = nil
+
+unless ENV['MOJI_HAS_BASIC'].nil?
+  @wxapi_simple = MojiWeather::Api::RestClient.new(app_code: ENV['MOJI_APPCODE'], cityid_base: 'http://aliv13.data.moji.com/whapi/json/alicityweather')
+end
+
 cache = LruRedux::TTL::Cache.new(100, ENV['CACHE_TTL'].to_i)
 
 def extract_device_id(topic)
@@ -21,19 +27,26 @@ def extract_device_id(topic)
 end
 
 def extract_req_type(type)
+  wxapi = @wxapi_simple.nil? ? @wxapi : @wxapi_simple
+
   case type
   when 'condition'
-    MojiWeather::Api::ApiType::CONDITION
+    [MojiWeather::Api::ApiType::CONDITION, wxapi]
   when 'aqi'
-    MojiWeather::Api::ApiType::AQI
-  when 'forecast24'
-    MojiWeather::Api::ApiType::FORECAST_24HRS
+    [MojiWeather::Api::ApiType::AQI, wxapi]
+  when 'forecast24h'
+    [MojiWeather::Api::ApiType::FORECAST_24HRS, @wxapi]
+  when 'forecast6d'
+    [MojiWeather::Api::ApiType::FORECAST_6DAYS, wxapi]
+  when 'forecast15d'
+    [MojiWeather::Api::ApiType::FORECAST_15DAYS, @wxapi]
+  else
+    [nil, nil]
   end
 end
 
+client = MQTT::Client.new
 begin
-  client = MQTT::Client.new
-
   client.host = ENV['IOT_MQTT_HOST']
   client.port = ENV['IOT_MQTT_PORT'].to_i
 
@@ -59,7 +72,7 @@ begin
       # decode CBOR object, retrieve request.
       dev_req = CBOR.decode(payload)
 
-      wx_cond = extract_req_type(dev_req['type'])
+      wx_cond, wxapi = extract_req_type(dev_req['type'])
 
       # Not a valid type
       next if wx_cond.nil?
