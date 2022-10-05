@@ -1,11 +1,15 @@
 # frozen_string_literal: true
 
+require 'logger'
+
 require 'bundler'
 
 Bundler.require
 
 Dotenv.load
 Dotenv.require_keys('MOJI_APPCODE', 'CACHE_TTL', 'IOT_MQTT_HOST', 'IOT_MQTT_PORT', 'IOT_MQTT_SSL')
+
+@logger = Logger.new($stdout)
 
 @wxapi = MojiWeather::Api::RestClient.new(app_code: ENV['MOJI_APPCODE'])
 @wxapi_simple = nil
@@ -59,7 +63,7 @@ begin
 
   client.connect
 
-  puts "[#{Time.now}] client [#{client}] connected..."
+  @logger.info "client [#{client}] connected..."
 
   client.subscribe('iot/weather/#')
 
@@ -67,7 +71,7 @@ begin
     # this method also checks if this is from a request topic.
     dev_id = extract_device_id(topic)
     unless dev_id.nil?
-      puts "[#{Time.now}][#{dev_id}] <- #{payload.length}B"
+      @logger.info "[#{dev_id}] <- #{payload.length}B"
 
       # decode CBOR object, retrieve request.
       dev_req = CBOR.decode(payload)
@@ -82,7 +86,7 @@ begin
                    elsif !dev_req['location'].nil?
                      { location: { lat: dev_req['location']['lat'], lon: dev_req['location']['lon'] } }
                    else
-                     puts "[#{Time.now}][#{dev_id}] not a valid request"
+                     @logger.warn "[#{dev_id}] not a valid request"
                      next
                    end
 
@@ -93,28 +97,28 @@ begin
 
       # Cache missed..
       if api_resp.nil?
-        puts "[#{Time.now}][#{dev_id}] cache missed"
+        @logger.info "[#{dev_id}] cache missed"
         # Request external service for weather information
         api_resp = wxapi.query(wx_cond, req_params)
 
         # Update cache entry
         cache["cache_#{req_params}"] = api_resp
       else
-        puts "[#{Time.now}][#{dev_id}] cache hit"
+        @logger.info "[#{dev_id}] cache hit"
       end
 
       # Encode CBOR object
       resp = api_resp.to_cbor
 
       # Publish to response topic.
-      puts "[#{Time.now}][#{dev_id}] -> #{resp.length}B"
+      @logger.info "[#{dev_id}] -> #{resp.length}B"
 
       # Send response
       client.publish("iot/weather/#{dev_id}/response", resp)
     end
   end
 rescue SystemExit, Interrupt
-  puts "[#{Time.now}] Interrupt caught, client [#{client}] disconnect."
+  @logger.warn "Interrupt caught, client [#{client}] disconnect."
   client.disconnect
 rescue StandardError => e
   p e
